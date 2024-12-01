@@ -4,14 +4,13 @@ internal class Program
 {
     static void Main(string[] args)
     {
-        //string filename = "sample.txt";
-        string filename = "input.txt";
+        string filename = "sample.txt";
+        //string filename = "input.txt";
         List<int> firstIds, secondIds;
         InitializeData(filename, out firstIds, out secondIds);
 
         PartOne(firstIds, secondIds);
         PartTwo(firstIds, secondIds);
-
     }
 
     private static void InitializeData(string filename, out List<int> firstIds, out List<int> secondIds)
@@ -38,11 +37,6 @@ internal class Program
         {
             idDifferences.Add(Math.Abs(firstIds[i] - secondIds[i]));
         }
-
-        //foreach (int id in idDifferences)
-        //{
-        //    Console.WriteLine(id);
-        //}
 
         Console.WriteLine($"Part One Answer: {idDifferences.Sum()}");
     }
