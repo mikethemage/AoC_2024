@@ -4,6 +4,8 @@ internal class Program
 {
     static void Main(string[] args)
     {
+        //Day One:
+
         string filename = "sample.txt";
         //string filename = "input.txt";
         List<int> firstIds, secondIds;
