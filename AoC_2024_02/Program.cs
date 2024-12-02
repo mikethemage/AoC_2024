@@ -64,8 +64,7 @@ internal class Program
                         {
                             partTwoSafeReports++;
                         }
-                    }
-                    
+                    }                    
                 }
 
                 var decreasingAnomolies = diffs.Count(x => x > -1 || x < -3);
@@ -104,20 +103,13 @@ internal class Program
                         {
                             partTwoSafeReports++;
                         }
-                    }
-                    
+                    }                    
                 }
-            }
-            
-
-
+            }           
         }
 
         Console.WriteLine($"Part One: Number of safe reports: {partOneSafeReports}");
         Console.WriteLine($"Part Two: Number of safe reports: {partTwoSafeReports}");
-
-
-
     }
 
     private static List<List<int>> InitializeData(string filename)
