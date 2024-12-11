@@ -5,29 +5,44 @@ internal class Program
 {
     static void Main(string[] args)
     {
-        string filename = "sample.txt";
-        //string filename = "input.txt";
+        //string filename = "sample.txt";
+        string filename = "input.txt";
 
-        List<long> currentStones = LoadData(filename);
-
-        const int numberOfBlinks = 25;
-
-        for (int i = 0; i < numberOfBlinks; i++)
+        List<long> initialStones = LoadData(filename);
+        Stack<(long Value, int BlinkCount)> stones = new Stack<(long Value, int BlinkCount)>();
+        for (int i = initialStones.Count - 1; i >= 0; i--)
         {
-            Console.WriteLine(i+1);
-            //OutputCurrentState(currentStones, i);
-            List<long> nextStones = new List<long>();
-            foreach (var stone in currentStones)
-            {
-                nextStones.AddRange(GetNextStones(stone));
-            }
-            currentStones = nextStones;
+            stones.Push(( initialStones[i], 0 ));
         }
 
-        //OutputCurrentState(currentStones, numberOfBlinks);
+        const int numberOfBlinks = 25;
+        int totalFinalStones = 0;
 
-        Console.WriteLine($"Number of stones: {currentStones.Count}");
+        while (stones.Count>0)
+        {
+            (long Value, int BlinkCount) currentStone = stones.Pop();
+            totalFinalStones += GetFinalScore(currentStone, numberOfBlinks);
+        }
 
+        Console.WriteLine($"Final number of stones: {totalFinalStones}");
+
+    }
+
+    private static int GetFinalScore((long Value, int BlinkCount) currentStone, int numberOfBlinks)
+    {
+        if (currentStone.BlinkCount == numberOfBlinks)
+        {
+            return 1;
+        }
+
+        List<long> nextStones = GetNextStones(currentStone.Value);
+        int total = 0;
+        foreach (long stone in nextStones)
+        {
+            total += GetFinalScore((stone, currentStone.BlinkCount+1), numberOfBlinks);
+        }
+
+        return total;
     }
 
     private static List<long> GetNextStones(long stone)
@@ -71,3 +86,4 @@ internal class Program
         return initialStones;
     }
 }
+
