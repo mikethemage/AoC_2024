@@ -8,40 +8,42 @@ internal class Program
         //string filename = "sample.txt";
         string filename = "input.txt";
 
-        List<long> initialStones = LoadData(filename);
-        Stack<(long Value, int BlinkCount)> stones = new Stack<(long Value, int BlinkCount)>();
-        for (int i = initialStones.Count - 1; i >= 0; i--)
-        {
-            stones.Push(( initialStones[i], 0 ));
-        }
+        List<long> initialStones = LoadData(filename);    
 
-        const int numberOfBlinks = 25;
-        int totalFinalStones = 0;
+        const int numberOfBlinks = 75;
+        long totalFinalStones = 0;
 
-        while (stones.Count>0)
+        foreach (var stone in initialStones)        
         {
-            (long Value, int BlinkCount) currentStone = stones.Pop();
-            totalFinalStones += GetFinalScore(currentStone, numberOfBlinks);
+            totalFinalStones += GetFinalScore((stone, 0), numberOfBlinks);
         }
 
         Console.WriteLine($"Final number of stones: {totalFinalStones}");
-
     }
 
-    private static int GetFinalScore((long Value, int BlinkCount) currentStone, int numberOfBlinks)
+    private static Dictionary<(long Value, int BlinkCount), long> _totalStoneHistory = new Dictionary<(long Value, int BlinkCount), long> ();
+
+    private static long GetFinalScore((long Value, int BlinkCount) currentStone, int numberOfBlinks)
     {
+        if(_totalStoneHistory.ContainsKey(currentStone))
+        {
+            return _totalStoneHistory[currentStone];
+        }
+
         if (currentStone.BlinkCount == numberOfBlinks)
         {
+            _totalStoneHistory.Add(currentStone, 1 );
             return 1;
         }
 
         List<long> nextStones = GetNextStones(currentStone.Value);
-        int total = 0;
+        long total = 0;
         foreach (long stone in nextStones)
         {
             total += GetFinalScore((stone, currentStone.BlinkCount+1), numberOfBlinks);
         }
 
+        _totalStoneHistory.Add(currentStone, total);
         return total;
     }
 
@@ -70,12 +72,7 @@ internal class Program
         }
 
         return nextStones;
-    }
-
-    private static void OutputCurrentState(List<long> currentStones, int numberOfBlinks)
-    {
-        Console.WriteLine($"After {numberOfBlinks} blink(s): {string.Join(" ", currentStones)}");
-    }
+    }    
 
     private static List<long> LoadData(string filename)
     {
