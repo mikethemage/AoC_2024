@@ -1,38 +1,63 @@
 ﻿
+using System.Diagnostics;
+
 namespace AoC_2024_11;
 
 internal class Program
 {
     static void Main(string[] args)
     {
-        //string filename = "sample.txt";
-        string filename = "input.txt";
+        string filename = "sample.txt";
+        //string filename = "input.txt";
 
-        List<long> initialStones = LoadData(filename);    
+        List<long> initialStones = LoadData(filename);
 
-        const int numberOfBlinks = 75;
+        Stopwatch stopWatch = new Stopwatch();
+        
+        const int numberOfBlinksPartOne = 25;
+        const int numberOfBlinksPartTwo = 75;
+        
+
+        stopWatch.Start();
         long totalFinalStones = 0;
-
-        foreach (var stone in initialStones)        
+        foreach (var stone in initialStones)
         {
-            totalFinalStones += GetFinalScore((stone, 0), numberOfBlinks);
+            totalFinalStones += GetFinalScore((stone, 0), numberOfBlinksPartOne, false);
         }
+        Console.WriteLine($"Final number of stones (part one brute force): {totalFinalStones}, Time: {stopWatch.Elapsed}");
+        stopWatch.Restart();
+        totalFinalStones = 0;
+        foreach (var stone in initialStones)
+        {
+            totalFinalStones += GetFinalScore((stone, 0), numberOfBlinksPartOne, true);
+        }
+        Console.WriteLine($"Final number of stones (part one with memoization): {totalFinalStones}, Time: {stopWatch.Elapsed}");
 
-        Console.WriteLine($"Final number of stones: {totalFinalStones}");
+        _totalStoneHistory =  new Dictionary<(long Value, int BlinkCount), long>();
+        stopWatch.Restart();
+        totalFinalStones = 0;
+        foreach (var stone in initialStones)
+        {
+            totalFinalStones += GetFinalScore((stone, 0), numberOfBlinksPartTwo, true);
+        }
+        Console.WriteLine($"Final number of stones (part two with memoization): {totalFinalStones}, Time: {stopWatch.Elapsed}");
     }
 
-    private static Dictionary<(long Value, int BlinkCount), long> _totalStoneHistory = new Dictionary<(long Value, int BlinkCount), long> ();
+    private static Dictionary<(long Value, int BlinkCount), long> _totalStoneHistory = new Dictionary<(long Value, int BlinkCount), long>();
 
-    private static long GetFinalScore((long Value, int BlinkCount) currentStone, int numberOfBlinks)
+    private static long GetFinalScore((long Value, int BlinkCount) currentStone, int numberOfBlinks, bool enableMemoization)
     {
-        if(_totalStoneHistory.ContainsKey(currentStone))
+        if (enableMemoization && _totalStoneHistory.ContainsKey(currentStone))
         {
             return _totalStoneHistory[currentStone];
         }
 
         if (currentStone.BlinkCount == numberOfBlinks)
         {
-            _totalStoneHistory.Add(currentStone, 1 );
+            if (enableMemoization)
+            {
+                _totalStoneHistory.Add(currentStone, 1);
+            }
             return 1;
         }
 
@@ -40,17 +65,19 @@ internal class Program
         long total = 0;
         foreach (long stone in nextStones)
         {
-            total += GetFinalScore((stone, currentStone.BlinkCount+1), numberOfBlinks);
+            total += GetFinalScore((stone, currentStone.BlinkCount + 1), numberOfBlinks, enableMemoization);
         }
-
-        _totalStoneHistory.Add(currentStone, total);
+        if (enableMemoization)
+        {
+            _totalStoneHistory.Add(currentStone, total);
+        }
         return total;
     }
 
     private static List<long> GetNextStones(long stone)
     {
         List<long> nextStones = new List<long>();
-        string stoneText=stone.ToString();
+        string stoneText = stone.ToString();
 
         if (stone == 0)
         {
@@ -68,11 +95,11 @@ internal class Program
         }
         else
         {
-            nextStones.Add(stone*2024);
+            nextStones.Add(stone * 2024);
         }
 
         return nextStones;
-    }    
+    }
 
     private static List<long> LoadData(string filename)
     {
