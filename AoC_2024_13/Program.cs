@@ -4,8 +4,8 @@ internal class Program
 {
     static void Main(string[] args)
     {
-        string filename = "sample.txt";
-        // string filename = "input.txt";
+        //string filename = "sample.txt";
+        string filename = "input.txt";
 
         List<Machine> machines = LoadData(filename);
 
@@ -29,85 +29,46 @@ internal class Program
         Console.WriteLine($"Part One Number of Prizes: {totalPrizes}, Total cost: {totalCost}");
 
 
-        //totalPrizes = 0;
-        //totalCost = 0;
-        //foreach (Machine machine in machines)
-        //{
-        //    machine.Prize = (machine.Prize.XLocation + 10000000000000, machine.Prize.YLocation + 10000000000000);
+        totalPrizes = 0;
+        totalCost = 0;
+        foreach (Machine machine in machines)
+        {
+            machine.Prize = (machine.Prize.XLocation + 10000000000000, machine.Prize.YLocation + 10000000000000);
 
-        //    long cheapestPrize = GetCheapestPrizeCost(machine);
-        //    if (cheapestPrize > 0)
-        //    {
-        //        Console.WriteLine($"Cheapest prize cost: {cheapestPrize}");
-        //        totalCost += cheapestPrize;
-        //        totalPrizes++;
-        //    }
-        //    else
-        //    {
-        //        Console.WriteLine("Cannot win a prize!");
-        //    }
-        //}
+            long cheapestPrize = GetCheapestPrizeCost(machine);
+            if (cheapestPrize > 0)
+            {
+                Console.WriteLine($"Cheapest prize cost: {cheapestPrize}");
+                totalCost += cheapestPrize;
+                totalPrizes++;
+            }
+            else
+            {
+                Console.WriteLine("Cannot win a prize!");
+            }
+        }
 
-        //Console.WriteLine($"Part Two Number of Prizes: {totalPrizes}, Total cost: {totalCost}");
+        Console.WriteLine($"Part Two Number of Prizes: {totalPrizes}, Total cost: {totalCost}");
     }
 
     private static long GetCheapestPrizeCost(Machine machine)
     {
-        State initialState = new State();
-        foreach (var button in machine.Buttons)
+        long px = machine.Prize.XLocation;
+        long py = machine.Prize.YLocation;
+        long ax = machine.Buttons.Where(c=>c.Name=="A").First().Movement.XOffset;
+        long ay = machine.Buttons.Where(c => c.Name == "A").First().Movement.YOffset;
+        long bx = machine.Buttons.Where(c => c.Name == "B").First().Movement.XOffset;
+        long by = machine.Buttons.Where(c => c.Name == "B").First().Movement.YOffset;
+        long n = ((px * by) - (py * bx)) / ((ax * by) - (ay * bx));
+        long m = (py - n * ay) / by;
+
+        long tx = n * ax + m * bx;
+        long ty = n * ay + m * by;
+        if(tx==px && ty==py)
         {
-            initialState.TimesButtonsPressed.Add(button.Name, 0);
+            return (n * machine.Buttons.Where(c => c.Name == "A").First().Cost) +
+                (m * machine.Buttons.Where(c => c.Name == "B").First().Cost);
         }
-
-        PriorityQueue<State, long> priorityQueue = new PriorityQueue<State, long>();
-        priorityQueue.Enqueue(initialState, 0);
-
-        HashSet<string> history = new HashSet<string>();
-            
-
-        while (priorityQueue.Count > 0)
-        {
-            //Console.WriteLine($"State count: {priorityQueue.Count}");
-            State state = priorityQueue.Dequeue();
-
-            string buttonPushes = state.GetEncodedButtonPushes();
-            if(history.Contains(buttonPushes))
-            {
-                continue;
-            }
-            history.Add(buttonPushes);
-
-            //Console.WriteLine($"Goal is: {machine.Prize.XLocation}, {machine.Prize.YLocation}.  Current state is: {state.CurrentLocation.X}, {state.CurrentLocation.Y}");
-
-            if (state.CurrentLocation==machine.Prize)
-            {
-                return state.CurrentCost;
-            }
-
-            if(state.CurrentLocation.X > machine.Prize.XLocation
-                ||
-                state.CurrentLocation.Y > machine.Prize.YLocation)
-            {
-                continue;
-            }
-
-            foreach (var button in machine.Buttons)
-            {
-                if (state.TimesButtonsPressed[button.Name]<100)
-                {
-                    State newState = new State();
-                    foreach (var key in state.TimesButtonsPressed.Keys)
-                    {
-                        newState.TimesButtonsPressed[key] = state.TimesButtonsPressed[key];
-                    }
-                    newState.TimesButtonsPressed[button.Name]++;
-                    newState.CurrentCost=state.CurrentCost + button.Cost;
-                    newState.CurrentLocation = (state.CurrentLocation.X+button.Movement.XOffset,
-                                                state.CurrentLocation.Y+button.Movement.YOffset);
-                    priorityQueue.Enqueue(newState, newState.CurrentCost);
-                }
-            }
-        }        
 
         return -1;
     }
@@ -154,6 +115,7 @@ internal class Program
                     var tokens = line.Replace("Prize: ", "").Split(", ");
                     int x = int.Parse(tokens[0].Replace("X=", ""));
                     int y = int.Parse(tokens[1].Replace("Y=", ""));
+                    
                     Machine machineTemp = new Machine { Prize = (x, y), Buttons = buttonsTemp };
                     machines.Add(machineTemp);
                 }
@@ -162,19 +124,6 @@ internal class Program
         return machines;
     }
 }
-
-internal class State
-{
-    public Dictionary<string, int> TimesButtonsPressed { get; private set; } = new Dictionary<string, int>();
-    public long CurrentCost { get; set; } = 0;
-    public (long X, long Y) CurrentLocation { get; set; } = (0, 0);
-
-    public string GetEncodedButtonPushes()
-    {
-        return string.Join(",", TimesButtonsPressed.OrderBy(x => x.Key).Select(x => $"{x.Key}:{x.Value}"));
-    }
-}
-
 
 internal class Machine
 {
