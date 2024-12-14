@@ -1,4 +1,5 @@
 ﻿
+
 namespace AoC_2024_14;
 
 internal class Program
@@ -13,30 +14,81 @@ internal class Program
         int width = 101;
         int height = 103;
 
-        List<Robot> robots = LoadData(filename);
+        List<Robot> part1Robots = LoadData(filename);
+        List<Robot> part2Robots = part1Robots.Select(x => new Robot(x)).ToList();
+        SolvePartOne(width, height, part1Robots);
 
+        Console.ReadKey();
+
+        SolvePartTwo(width, height, part2Robots);
+    }
+
+    private static void SolvePartTwo(int width, int height, List<Robot> part2Robots)
+    {
+        Console.Clear();
+        Console.WriteLine("\x1b[3J");
+        Console.WriteLine("Initial State:");
+        OutputPositions(part2Robots, width, height);
+        int seconds = 0;
+        while(true)
+        {
+            
+            seconds++;
+            
+            foreach (var robot in part2Robots)
+            {
+                robot.Move(1, width, height);
+            }
+
+            var halfWidth = width / 2;
+            var halfHeight = height / 2;
+            var topLeft = part2Robots.Where(r => r.Position.X < halfWidth && r.Position.Y < halfHeight).Count();
+            var topRight = part2Robots.Where(r => r.Position.X > halfWidth && r.Position.Y < halfHeight).Count();
+            var bottomLeft = part2Robots.Where(r => r.Position.X < halfWidth && r.Position.Y > halfHeight).Count();
+            var bottomRight = part2Robots.Where(r => r.Position.X > halfWidth && r.Position.Y > halfHeight).Count();
+            var totalRobots = part2Robots.Count();
+
+            if(topLeft > totalRobots/2
+                || topRight > totalRobots/2
+                || bottomLeft > totalRobots/2
+                || bottomRight > totalRobots/2
+                )
+            {
+                Console.Clear();
+                Console.WriteLine("\x1b[3J");
+                Console.WriteLine($"After {seconds} seconds:");
+                OutputPositions(part2Robots, width, height);
+                Console.ReadKey();
+                break;
+            }
+
+            
+        }
+    }
+
+    private static void SolvePartOne(int width, int height, List<Robot> part1Robots)
+    {
         Console.WriteLine("Before:");
-        OutputPositions(robots, width, height);
+        OutputPositions(part1Robots, width, height);
         Console.WriteLine();
 
         int numberOfSeconds = 100;
-        foreach (var robot in robots)
+        foreach (var robot in part1Robots)
         {
             robot.Move(numberOfSeconds, width, height);
         }
 
         Console.WriteLine("After:");
-        OutputPositions(robots, width, height);
+        OutputPositions(part1Robots, width, height);
 
-        var halfWidth=width/2;
-        var halfHeight=height/2;
-        var topLeft = robots.Where(r => r.Position.X < halfWidth && r.Position.Y < halfHeight).Count();
-        var topRight = robots.Where(r => r.Position.X > halfWidth && r.Position.Y < halfHeight).Count();
-        var bottomLeft = robots.Where(r => r.Position.X < halfWidth && r.Position.Y > halfHeight).Count();
-        var bottomRight = robots.Where(r => r.Position.X > halfWidth && r.Position.Y > halfHeight).Count();
+        var halfWidth = width / 2;
+        var halfHeight = height / 2;
+        var topLeft = part1Robots.Where(r => r.Position.X < halfWidth && r.Position.Y < halfHeight).Count();
+        var topRight = part1Robots.Where(r => r.Position.X > halfWidth && r.Position.Y < halfHeight).Count();
+        var bottomLeft = part1Robots.Where(r => r.Position.X < halfWidth && r.Position.Y > halfHeight).Count();
+        var bottomRight = part1Robots.Where(r => r.Position.X > halfWidth && r.Position.Y > halfHeight).Count();
         var safteyFactor = topLeft * topRight * bottomLeft * bottomRight;
         Console.WriteLine($"Top Left: {topLeft}, Top Right: {topRight}, Bottom Left: {bottomLeft}, Bottom Right: {bottomRight}, Safety Factor: {safteyFactor}");
-
     }
 
     private static void OutputPositions(List<Robot> robots, int width, int height)
@@ -89,6 +141,11 @@ internal class Robot
     {
         Position = (position[0], position[1]);
         Velocity = (velocity[0], velocity[1]);
+    }
+    public Robot(Robot copyFrom)
+    {
+        Position=copyFrom.Position;
+        Velocity=copyFrom.Velocity;
     }
 
     public void Move(int seconds, int width, int height)
