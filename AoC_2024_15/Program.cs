@@ -6,26 +6,34 @@ internal class Program
     static void Main(string[] args)
     {
         //string filename = "sample.txt";
-        //string filename = "largesample.txt";
-        string filename = "input.txt";
+        string filename = "largesample.txt";
+        //string filename = "input.txt";
 
-        PuzzleData puzzleData = LoadData(filename);
-
-        MapFeature robot = puzzleData.Map.Where(f=>f.FeatureType=='@').First();
-
-        //Console.WriteLine("Initial State:");
-        //puzzleData.DrawMap();
-        //Console.WriteLine();
-
-        foreach (char instruction in puzzleData.Instructions)
+        for(int partNumber = 1; partNumber<=2;partNumber++)
         {
-            MoveRobot(robot, instruction, puzzleData.Map);
-            //Console.WriteLine($"Move {instruction}:");
+            PuzzleData puzzleData = LoadData(filename);
+
+            if (partNumber == 2)
+            {
+                puzzleData.DoubleWidth();
+            }
+
+            MapFeature robot = puzzleData.Map.Where(f => f.FeatureType == '@').First();
+
+            //Console.WriteLine("Initial State:");
             //puzzleData.DrawMap();
             //Console.WriteLine();
-        }
 
-        Console.WriteLine($"Sum of all boxes GPS: {puzzleData.GetAllBoxGps()}");
+            foreach (char instruction in puzzleData.Instructions)
+            {
+                MoveRobot(robot, instruction, puzzleData.Map);
+                //Console.WriteLine($"Move {instruction}:");
+                //puzzleData.DrawMap();
+                //Console.WriteLine();
+            }
+
+            Console.WriteLine($"Part {partNumber}: Sum of all boxes GPS: {puzzleData.GetAllBoxGps()}");
+        }        
     }
 
     private static void MoveRobot(MapFeature robot, char instruction, List<MapFeature> map)
@@ -53,32 +61,48 @@ internal class Program
                 throw new Exception($"Invalid instruction!: {instruction}");
         }
 
-        int currentX = robot.X;
-        int currentY = robot.Y;
+        
 
         MapFeature? nextFeature = null;
 
-        List<MapFeature> featuresToMove = new List<MapFeature> { robot };
+        Stack<MapFeature> potentialFeatures = new Stack<MapFeature>();
+        potentialFeatures.Push(robot);
+        HashSet<MapFeature> featuresToMove = new HashSet<MapFeature>();
 
-        do
+        while(potentialFeatures.Count > 0) 
         {
-            currentX += offset.xOffset;
-            currentY += offset.yOffset;
-            nextFeature=map.Where(f=>f.X==currentX && f.Y==currentY).FirstOrDefault();
+            MapFeature currentFeature = potentialFeatures.Pop();
+            featuresToMove.Add(currentFeature);
 
-            if(nextFeature!=null)
+            int currentX = currentFeature.X + offset.xOffset;
+            int currentY = currentFeature.Y + offset.yOffset;
+            nextFeature=map.Where(f=>f.X==currentX && f.Y==currentY).FirstOrDefault();
+            
+            if (nextFeature!=null)
             {
                 if(nextFeature.FeatureType=='#')
                 {
                     return;
                 }
                 else
-                {
-                    featuresToMove.Add(nextFeature);
+                {                    
+                    potentialFeatures.Push(nextFeature);
+                    if (offset.xOffset == 0)
+                    {
+                        if (nextFeature.FeatureType == '[')
+                        {
+                            potentialFeatures.Push(map.Where(f => f.X == nextFeature.X + 1 && f.Y == nextFeature.Y).First());
+                        }
+                        if (nextFeature.FeatureType == ']')
+                        {
+                            potentialFeatures.Push(map.Where(f => f.X == nextFeature.X - 1 && f.Y == nextFeature.Y).First());
+                        }
+                    }
+                    
                 }
             }
 
-        } while(nextFeature != null);
+        } 
 
         foreach (MapFeature feature in featuresToMove)
         {
@@ -134,9 +158,29 @@ internal class PuzzleData
         Height = height;
     }
 
+    public void DoubleWidth()
+    {
+        Width *= 2;
+        List<MapFeature> newFeatures = new List<MapFeature>();
+        foreach (MapFeature feature in Map)
+        {
+            feature.X *= 2;
+            if(feature.FeatureType=='#')
+            {
+                newFeatures.Add(new MapFeature('#', feature.X + 1, feature.Y));
+            }
+            if(feature.FeatureType=='O')
+            {
+                feature.FeatureType = '[';
+                newFeatures.Add(new MapFeature(']', feature.X + 1, feature.Y));
+            }
+        }
+        Map.AddRange(newFeatures);
+    }
+
     public int GetAllBoxGps()
     {
-        return Map.Where(f=>f.FeatureType=='O').Sum(f=>f.GetGps());
+        return Map.Where(f=>f.FeatureType=='O'||f.FeatureType=='[').Sum(f=>f.GetGps());
     }
 
     public void DrawMap()
@@ -164,7 +208,7 @@ internal class MapFeature
 {
     public int X { get; set; }
     public int Y { get; set; }
-    public char FeatureType { get; private set; }
+    public char FeatureType { get; set; }
     public bool Moveable { get; private set; }
 
     public int GetGps()
