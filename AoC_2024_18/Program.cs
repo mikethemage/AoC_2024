@@ -11,13 +11,13 @@ internal class Program
         const int inputSize = 71;
         const int inputBytes = 1024;
 
-        string filename = "sample.txt";
-        int height = sampleSize;
-        int numberBytes = sampleBytes;
+        //string filename = "sample.txt";
+        //int height = sampleSize;
+        //int numberBytes = sampleBytes;
 
-        //string filename = "input.txt";
-        //int height = inputSize;
-        //int numberBytes = inputBytes;
+        string filename = "input.txt";
+        int height = inputSize;
+        int numberBytes = inputBytes;
 
         int width = height;
         string[] lines = File.ReadAllLines(filename);
@@ -32,61 +32,66 @@ internal class Program
         (int X, int Y) start = (0, 0);
         (int X, int Y) goal = (width-1, height-1);
 
-
-        HashSet<(int X, int Y)> fallenBytes = new HashSet<(int X, int Y)> ( fallingBytes.Take(numberBytes).ToList());        
-        PriorityQueue<((int X, int Y) Position, int Steps), int>  priorityQueue = new PriorityQueue<((int X, int Y) Position, int Steps), int>();
-        priorityQueue.Enqueue((start,0), width+height);
-        Dictionary<(int X, int Y), int> visited = new Dictionary<(int X, int Y), int>();
-        int shortestSteps = -1;
-        while (priorityQueue.Count > 0)
+        for(int testNumBytes = numberBytes; testNumBytes < fallingBytes.Count; testNumBytes++)
         {
-            ((int X, int Y) Position, int Steps) currentState = priorityQueue.Dequeue();
-
-            if (visited.ContainsKey(currentState.Position))
+            HashSet<(int X, int Y)> fallenBytes = new HashSet<(int X, int Y)>(fallingBytes.Take(testNumBytes).ToList());
+            PriorityQueue<((int X, int Y) Position, int Steps), int> priorityQueue = new PriorityQueue<((int X, int Y) Position, int Steps), int>();
+            priorityQueue.Enqueue((start, 0), width + height);
+            Dictionary<(int X, int Y), int> visited = new Dictionary<(int X, int Y), int>();
+            int shortestSteps = -1;
+            while (priorityQueue.Count > 0)
             {
-                if (currentState.Steps >= visited[currentState.Position])
+                ((int X, int Y) Position, int Steps) currentState = priorityQueue.Dequeue();
+
+                if (visited.ContainsKey(currentState.Position))
                 {
-                    continue;
+                    if (currentState.Steps >= visited[currentState.Position])
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        visited[currentState.Position] = currentState.Steps;
+                    }
                 }
                 else
                 {
-                    visited[currentState.Position] = currentState.Steps;
+                    visited.Add(currentState.Position, currentState.Steps);
                 }
-            }
-            else
-            {
-                visited.Add(currentState.Position,currentState.Steps);
+
+                if (shortestSteps >= 0)
+                {
+                    if (currentState.Steps > shortestSteps)
+                    {
+                        continue;
+                    }
+                }
+
+                if (currentState.Position == goal)
+                {
+                    shortestSteps = currentState.Steps;
+                    continue;
+                }
+
+                List<(int X, int Y)> nextPositions = GetNextPositions(currentState.Position, fallenBytes, width, height);
+                foreach ((int X, int Y) nextPosition in nextPositions)
+                {
+                    priorityQueue.Enqueue((nextPosition, currentState.Steps + 1), (width - nextPosition.X) + (height - nextPosition.Y));
+                }
             }
 
             if (shortestSteps >= 0)
             {
-                if (currentState.Steps > shortestSteps)
-                {
-                    continue;
-                }
+                Console.WriteLine($"First {testNumBytes} bytes fallen, Shortest steps: {shortestSteps}");
             }
-
-            if (currentState.Position == goal)
+            else
             {
-                shortestSteps = currentState.Steps;
-                continue;
-            }
-
-            List<(int X, int Y)> nextPositions = GetNextPositions(currentState.Position, fallenBytes, width, height);
-            foreach ((int X, int Y) nextPosition in nextPositions)
-            {
-                priorityQueue.Enqueue((nextPosition, currentState.Steps + 1), (width-nextPosition.X) + (height-nextPosition.Y));
+                Console.WriteLine($"First {testNumBytes} bytes fallen, Path not found!");
+                Console.WriteLine($"Last byte was {fallingBytes[testNumBytes - 1].X},{fallingBytes[testNumBytes - 1].Y}");
+                break;
             }
         }
-
-        if (shortestSteps >= 0)
-        {
-            Console.WriteLine($"Shortest steps: {shortestSteps}");
-        }
-        else
-        {
-            Console.WriteLine("Path not found!");
-        }
+        
     }
 
     private static List<(int X, int Y)> GetNextPositions((int X, int Y) position, HashSet<(int X, int Y)> fallenBytes, int width, int height)
