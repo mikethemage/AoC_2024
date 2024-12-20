@@ -8,8 +8,9 @@ internal class Program
         string filename = "input.txt";
         string[] lines = File.ReadAllLines(filename);
         PuzzleData puzzleData = new PuzzleData(lines);
+        const int maxCheats = 20;
 
-        List<State> endStateNoCheating = RunSimulation(puzzleData, new State { Location = puzzleData.Start, History = new() }, -1, false);
+        List<State> endStateNoCheating = RunSimulation(puzzleData, new State { Location = puzzleData.Start, History = new() }, -1, false, maxCheats);
 
         if (endStateNoCheating.Count>0)
         {
@@ -20,12 +21,21 @@ internal class Program
 
             foreach( State cheatStartState in endStateNoCheating[0].History.Values.Where(x=>x.Location!=puzzleData.End) )
             {
-                List<State> intermediateStates = cheatStartState.GetNextStates(puzzleData,true).Where(x=>puzzleData.Walls.Contains(x.Location)).ToList();
+                List<State> intermediateStates = cheatStartState.GetNextStates(puzzleData,true,maxCheats).Where(x=>puzzleData.Walls.Contains(x.Location)).ToList();
                 List<State> cheatEndStates = new List<State>();
-                foreach (var intermediateState in intermediateStates)
+
+                for (int i = 0; i < maxCheats-1; i++)
                 {
-                    cheatEndStates.AddRange(intermediateState.GetNextStates(puzzleData,true).Where(x => !puzzleData.Walls.Contains(x.Location)));                    
+                    List<State> nextIntermediateStates = new List<State>();
+                    foreach (var intermediateState in intermediateStates)
+                    {                        
+                        var temp = intermediateState.GetNextStates(puzzleData, true, maxCheats);
+                        cheatEndStates.AddRange(temp.Where(x => !puzzleData.Walls.Contains(x.Location)));
+                        nextIntermediateStates.AddRange(temp.Where(x => puzzleData.Walls.Contains(x.Location)));
+                    }
+                    intermediateStates = nextIntermediateStates;
                 }
+                
 
                 foreach (var cheatEndState in cheatEndStates)
                 {
@@ -87,7 +97,7 @@ internal class Program
                 }
             }
 
-            const int cutoff = 100;
+            const int cutoff = 50;
             Console.WriteLine();
             int total = 0;
             foreach (var improvement in countsByImprovment.Keys.Where(x=>x>=cutoff).OrderBy(x=>x))
@@ -125,7 +135,7 @@ internal class Program
         }
     }
 
-    private static List<State> RunSimulation(PuzzleData puzzleData, State startState, int maxSteps, bool cheatingAllowed)
+    private static List<State> RunSimulation(PuzzleData puzzleData, State startState, int maxSteps, bool cheatingAllowed, int maxCheats)
     {
         List<State> output = new List<State>();
         PriorityQueue<State, int> priorityQueue = new PriorityQueue<State, int>();
@@ -169,7 +179,7 @@ internal class Program
                 }                   
             }
 
-            foreach (State nextState in state.GetNextStates(puzzleData, cheatingAllowed))
+            foreach (State nextState in state.GetNextStates(puzzleData, cheatingAllowed, maxCheats))
             {
                 priorityQueue.Enqueue(nextState, nextState.StepsTaken);
             }
@@ -197,19 +207,19 @@ internal class State
 
     public required Dictionary<(int X, int Y), State> History { get; init; }
 
-    public List<State> GetNextStates(PuzzleData puzzleData, bool cheatingAllowed)
+    public List<State> GetNextStates(PuzzleData puzzleData, bool cheatingAllowed, int maxCheats)
     {
         List<State> output = new List<State>();
 
-        AddNextState(puzzleData, output, (Location.X + 1, Location.Y), cheatingAllowed);
-        AddNextState(puzzleData, output, (Location.X - 1, Location.Y), cheatingAllowed);
-        AddNextState(puzzleData, output, (Location.X, Location.Y + 1), cheatingAllowed);
-        AddNextState(puzzleData, output, (Location.X, Location.Y - 1), cheatingAllowed);
+        AddNextState(puzzleData, output, (Location.X + 1, Location.Y), cheatingAllowed, maxCheats);
+        AddNextState(puzzleData, output, (Location.X - 1, Location.Y), cheatingAllowed, maxCheats);
+        AddNextState(puzzleData, output, (Location.X, Location.Y + 1), cheatingAllowed, maxCheats);
+        AddNextState(puzzleData, output, (Location.X, Location.Y - 1), cheatingAllowed, maxCheats);
 
         return output;
     }
 
-    private void AddNextState(PuzzleData puzzleData, List<State> output, (int X, int Y) nextLocation, bool cheatingAllowed)
+    private void AddNextState(PuzzleData puzzleData, List<State> output, (int X, int Y) nextLocation, bool cheatingAllowed, int maxCheats)
     {
         if (History.ContainsKey(nextLocation))
         {
@@ -220,14 +230,19 @@ internal class State
         newHistory.Add(Location, this);
         if (puzzleData.Walls.Contains(nextLocation))
         {
-            if (cheatingAllowed && CheatsUsed < 1)
+            if (cheatingAllowed && CheatsUsed < maxCheats - 1)
             {
                 output.Add(new State { Location = nextLocation, History = newHistory, CheatsUsed = CheatsUsed + 1, CheatStartLocation=CheatStartLocation  ?? Location, CheatEndLocation=null });
             }
         }
         else
         {
-            int newCheatsUsed = CheatsUsed == 1 ? 2 : CheatsUsed;
+            int newCheatsUsed = CheatsUsed;            
+            if (CheatsUsed != 0)
+            {
+                newCheatsUsed = CheatsUsed == maxCheats ?  CheatsUsed : CheatsUsed + 1;
+            }
+            
             var newCheatEndLocation = CheatEndLocation;
             if(newCheatEndLocation==null && CheatStartLocation!=null)
             {
