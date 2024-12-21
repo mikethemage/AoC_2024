@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace AoC_2024_20;
+﻿namespace AoC_2024_20;
 
 internal class Program
 {
