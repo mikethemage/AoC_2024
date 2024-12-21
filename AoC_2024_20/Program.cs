@@ -2,15 +2,18 @@
 
 internal class Program
 {
+    private readonly static List<(int X, int Y)> _directions = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+
     static void Main(string[] args)
     {
-        string filename = "sample.txt";
-        const int improvementsOverOrEqualTo = 50;
+        //string filename = "sample.txt";
+        //const int improvementsOverOrEqualTo = 50;
 
-        //string filename = "input.txt";
-        //const int improvementsOverOrEqualTo = 100;
+        string filename = "input.txt";
+        const int improvementsOverOrEqualTo = 100;
 
-        const int maxCheats = 20;       
+        const int maxCheatsPart1 = 2;
+        const int maxCheatsPart2 = 20;
         const int improvementsOver = improvementsOverOrEqualTo - 1;
 
         string[] lines = File.ReadAllLines(filename);
@@ -23,46 +26,39 @@ internal class Program
 
         while (currentStep.Location != puzzleData.End)
         {
-            var nextLocation = (currentStep.Location.X + 1, currentStep.Location.Y);
-            Step? nextStep = GetNextStep(puzzleData, currentStep, history, nextLocation);
-
-            if (nextStep == null)
+            foreach (var direction in _directions)
             {
-                nextLocation = (currentStep.Location.X - 1, currentStep.Location.Y);
-                nextStep = GetNextStep(puzzleData, currentStep, history, nextLocation);
+                var nextLocation = (currentStep.Location.X + direction.X, currentStep.Location.Y + direction.Y);
+                Step? nextStep = GetNextStep(puzzleData, currentStep, history, nextLocation);
+                if (nextStep != null)
+                {
+                    history.Add(nextStep.Location, nextStep);
+                    currentStep = nextStep;
+                    break;
+                }
             }
-
-            if (nextStep == null)
-            {
-                nextLocation = (currentStep.Location.X, currentStep.Location.Y + 1);
-                nextStep = GetNextStep(puzzleData, currentStep, history, nextLocation);
-            }
-
-            if (nextStep == null)
-            {
-                nextLocation = (currentStep.Location.X, currentStep.Location.Y - 1);
-                nextStep = GetNextStep(puzzleData, currentStep, history, nextLocation);
-            }
-
-            if (nextStep == null)
-            {
-                throw new Exception("No next step from here!");
-            }
-
-            history.Add(nextStep.Location, nextStep);
-            currentStep = nextStep;
         }
 
         Console.WriteLine($"Steps taken without cheating: {history[puzzleData.End].StepsTaken}");
 
+        Console.WriteLine("Part 1:");
+        FindCheats(maxCheatsPart1, improvementsOver, puzzleData, history);
+
+        Console.WriteLine("");
+        Console.WriteLine("Part 2:");
+        FindCheats(maxCheatsPart2, improvementsOver, puzzleData, history);
+    }
+
+    private static void FindCheats(int maxCheats, int improvementsOver, PuzzleData puzzleData, Dictionary<(int X, int Y), Step> history)
+    {
         List<int> improvements = new List<int>();
         foreach (var location in history.Keys)
         {
-            Dictionary<(int X, int Y), Step> cheets = new Dictionary<(int X, int Y), Step>();
+            Dictionary<(int X, int Y), Step> cheats = new Dictionary<(int X, int Y), Step>();
 
             Dictionary<(int X, int Y), int> placesICanGetTo = GetPlaces(maxCheats, history, location, puzzleData);
             foreach (var place in placesICanGetTo)
-            {                
+            {
                 int improvement = history[place.Key].StepsTaken - (history[location].StepsTaken + place.Value);
                 if (improvement > improvementsOver)
                 {
@@ -72,101 +68,49 @@ internal class Program
         }
 
         int total = 0;
-        foreach (var item in improvements.GroupBy(x=>x).OrderBy(x=>x.Key))
+        foreach (var item in improvements.GroupBy(x => x).OrderBy(x => x.Key))
         {
             Console.WriteLine($"There are {item.Count()} cheats that save {item.Key} picoseconds.");
             total += item.Count();
         }
         Console.WriteLine();
         Console.WriteLine($"Total: {total}");
-
     }
-
-    private static Dictionary<(int RemainingSteps, (int X, int Y) Location), Dictionary<(int X, int Y), int>> Memo = new();
 
     private static Dictionary<(int X, int Y), int> GetPlaces(int remainingSteps, Dictionary<(int X, int Y), Step> history, (int X, int Y) location, PuzzleData puzzleData)
     {
-        if(Memo.ContainsKey((remainingSteps, location)))
-        {
-            return Memo[(remainingSteps, location)];
-        }
-
         Dictionary<(int X, int Y), int> placesICanGetTo = new Dictionary<(int X, int Y), int>();
         for (int xOffset = -remainingSteps; xOffset <= remainingSteps; xOffset++)
         {
             for (int yOffset = -remainingSteps; yOffset <= remainingSteps; yOffset++)
             {
-                if ((Math.Abs(xOffset) >= 1 && yOffset == 0) ||
-                    (Math.Abs(yOffset) >= 1) && xOffset == 0)
+                if ((Math.Abs(xOffset) > 1 ||
+                    Math.Abs(yOffset) > 1)
+                    && Math.Abs(xOffset) + Math.Abs(yOffset) <= remainingSteps
+                    )
                 {
                     (int X, int Y) cheatLocation = (location.X + xOffset, location.Y + yOffset);
                     if (history.ContainsKey(cheatLocation))
                     {
                         int newStepsTaken = Math.Abs(xOffset) + Math.Abs(yOffset);
 
-                        if (placesICanGetTo.ContainsKey(cheatLocation))
-                        {
-                            if (placesICanGetTo[cheatLocation]>newStepsTaken)
-                            {
-                                placesICanGetTo[cheatLocation] = newStepsTaken;
-
-                                if(cheatLocation!=puzzleData.End)
-                                {
-                                    foreach (var place in GetPlaces(remainingSteps - newStepsTaken, history, cheatLocation, puzzleData))
-                                    {
-                                        if (placesICanGetTo.ContainsKey(place.Key))
-                                        {
-                                            if (placesICanGetTo[place.Key] > newStepsTaken + place.Value)
-                                            {
-                                                placesICanGetTo[place.Key] = newStepsTaken + place.Value;
-                                            }
-                                        }
-                                        else
-                                        {
-                                            placesICanGetTo.Add(place.Key, newStepsTaken + place.Value);
-                                        }
-                                    }
-                                }                                
-                            }
-                        }
-                        else
-                        {
-                            placesICanGetTo.Add(cheatLocation, newStepsTaken);
-
-                            if (cheatLocation != puzzleData.End)
-                            {
-                                foreach (var place in GetPlaces(remainingSteps - newStepsTaken, history, cheatLocation, puzzleData))
-                                {
-                                    if (placesICanGetTo.ContainsKey(place.Key))
-                                    {
-                                        if (placesICanGetTo[place.Key] > newStepsTaken + place.Value)
-                                        {
-                                            placesICanGetTo[place.Key] = newStepsTaken + place.Value;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        placesICanGetTo.Add(place.Key, newStepsTaken + place.Value);
-                                    }
-                                }
-                            }                                
-                        }
+                        placesICanGetTo.Add(cheatLocation, newStepsTaken);
+                        
                     }
                     else
                     {
-                        if(!puzzleData.Walls.Contains(cheatLocation))
+                        if (!puzzleData.Walls.Contains(cheatLocation))
                         {
-                            if(cheatLocation.X>=0 && cheatLocation.X<puzzleData.Width && cheatLocation.Y>=0 && cheatLocation.Y<puzzleData.Height)
+                            if (cheatLocation.X >= 0 && cheatLocation.X < puzzleData.Width && cheatLocation.Y >= 0 && cheatLocation.Y < puzzleData.Height)
                             {
                                 throw new Exception("Invalid place!");
-                            }                            
+                            }
                         }
                     }
                 }
             }
         }
 
-        Memo.Add((remainingSteps, location),placesICanGetTo);
         return placesICanGetTo;
     }
 
@@ -185,7 +129,7 @@ internal class Program
 internal class Step
 {
     public required (int X, int Y) Location { get; set; }
-   
+
     public required int StepsTaken { get; set; }
 }
 
