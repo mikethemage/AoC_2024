@@ -12,7 +12,7 @@ internal class Program
         string filename = "input.txt";
         const int improvementsOverOrEqualTo = 100;
 
-        const int maxCheats = 20;       
+        const int maxCheats = 20;
         const int improvementsOver = improvementsOverOrEqualTo - 1;
 
         string[] lines = File.ReadAllLines(filename);
@@ -64,7 +64,7 @@ internal class Program
 
             Dictionary<(int X, int Y), int> placesICanGetTo = GetPlaces(maxCheats, history, location, puzzleData);
             foreach (var place in placesICanGetTo)
-            {                
+            {
                 int improvement = history[place.Key].StepsTaken - (history[location].StepsTaken + place.Value);
                 if (improvement > improvementsOver)
                 {
@@ -74,7 +74,7 @@ internal class Program
         }
 
         int total = 0;
-        foreach (var item in improvements.GroupBy(x=>x).OrderBy(x=>x.Key))
+        foreach (var item in improvements.GroupBy(x => x).OrderBy(x => x.Key))
         {
             Console.WriteLine($"There are {item.Count()} cheats that save {item.Key} picoseconds.");
             total += item.Count();
@@ -88,7 +88,7 @@ internal class Program
 
     private static Dictionary<(int X, int Y), int> GetPlaces(int remainingSteps, Dictionary<(int X, int Y), Step> history, (int X, int Y) location, PuzzleData puzzleData)
     {
-        if(Memo.ContainsKey((remainingSteps, location)))
+        if (Memo.ContainsKey((remainingSteps, location)))
         {
             return Memo[(remainingSteps, location)];
         }
@@ -108,11 +108,11 @@ internal class Program
 
                         if (placesICanGetTo.ContainsKey(cheatLocation))
                         {
-                            if (placesICanGetTo[cheatLocation]>newStepsTaken)
+                            if (placesICanGetTo[cheatLocation] > newStepsTaken)
                             {
                                 placesICanGetTo[cheatLocation] = newStepsTaken;
 
-                                if(cheatLocation!=puzzleData.End)
+                                if (cheatLocation != puzzleData.End)
                                 {
                                     foreach (var place in GetPlaces(remainingSteps - newStepsTaken, history, cheatLocation, puzzleData))
                                     {
@@ -128,7 +128,7 @@ internal class Program
                                             placesICanGetTo.Add(place.Key, newStepsTaken + place.Value);
                                         }
                                     }
-                                }                                
+                                }
                             }
                         }
                         else
@@ -151,24 +151,24 @@ internal class Program
                                         placesICanGetTo.Add(place.Key, newStepsTaken + place.Value);
                                     }
                                 }
-                            }                                
+                            }
                         }
                     }
                     else
                     {
-                        if(!puzzleData.Walls.Contains(cheatLocation))
+                        if (!puzzleData.Walls.Contains(cheatLocation))
                         {
-                            if(cheatLocation.X>=0 && cheatLocation.X<puzzleData.Width && cheatLocation.Y>=0 && cheatLocation.Y<puzzleData.Height)
+                            if (cheatLocation.X >= 0 && cheatLocation.X < puzzleData.Width && cheatLocation.Y >= 0 && cheatLocation.Y < puzzleData.Height)
                             {
                                 throw new Exception("Invalid place!");
-                            }                            
+                            }
                         }
                     }
                 }
             }
         }
 
-        Memo.Add((remainingSteps, location),placesICanGetTo);
+        Memo.Add((remainingSteps, location), placesICanGetTo);
         return placesICanGetTo;
     }
 
@@ -187,7 +187,7 @@ internal class Program
 internal class Step
 {
     public required (int X, int Y) Location { get; set; }
-   
+
     public required int StepsTaken { get; set; }
 }
 
