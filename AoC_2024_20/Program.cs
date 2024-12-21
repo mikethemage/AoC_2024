@@ -6,11 +6,11 @@ internal class Program
 {
     static void Main(string[] args)
     {
-        //string filename = "sample.txt";
-        //const int improvementsOverOrEqualTo = 1;
+        string filename = "sample.txt";
+        const int improvementsOverOrEqualTo = 50;
 
-        string filename = "input.txt";
-        const int improvementsOverOrEqualTo = 100;
+        //string filename = "input.txt";
+        //const int improvementsOverOrEqualTo = 100;
 
         const int maxCheats = 20;
         const int improvementsOver = improvementsOverOrEqualTo - 1;
