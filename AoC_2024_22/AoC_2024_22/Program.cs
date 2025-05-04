@@ -4,8 +4,8 @@ internal class Program
 {
     static void Main(string[] args)
     {
-        //const string filename = "sample.txt";
-        const string filename = "input.txt";
+        const string filename = "sample.txt";
+        //const string filename = "input.txt";
 
         string[] lines = File.ReadAllLines(filename);
 
@@ -148,6 +148,7 @@ public class Monkey
 
     public void CalculatePriceDifferences()
     {
+        
         for (int i = 1; i < Prices.Count; i++)
         {
             PriceDifferences.Add(Prices[i] - Prices[i - 1]);
