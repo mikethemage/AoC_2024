@@ -1,203 +1,112 @@
-﻿namespace AoC_2024_21;
+﻿using System.Collections.Concurrent;
+
+namespace AoC_2024_21;
 
 class Program
 {
     static void Main()
     {
-        string[] codes = File.ReadAllLines("sample.txt");
-        //string[] codes = File.ReadAllLines("input.txt");
+        List<string> input = File.ReadAllLines("sample.txt").ToList();
+        //List<string> input = File.ReadAllLines("input.txt").ToList();
 
-        KeypadType numericKeypad = GenerateNumericKeypad();
-        KeypadType directionalKeypad = GenerateDirectionalKeypad();
-
-        MemoizedBFSProvider memoizedBFSProvider = new MemoizedBFSProvider();
-        int totalComplexity = 0;
-        foreach (var code in codes)
-        {
-            totalComplexity += RunForCode(numericKeypad, directionalKeypad, memoizedBFSProvider, code);
-        }
-        
-        
-        Console.WriteLine($"Total Complexity: {totalComplexity}");
+        Console.WriteLine(Solve(input, 2));
+        Console.WriteLine(Solve(input, 25));
     }
 
-    private static int RunForCode(KeypadType numericKeypad, KeypadType directionalKeypad, MemoizedBFSProvider memoizedBFSProvider, string code)
+    private static long Solve(List<string> input, int depth)
     {
-        char currentKey = 'A';
-        string finalSequence = string.Empty;
-        foreach (char nextKey in code)
+        var keypad1 = ParseKeypad(["789", "456", "123", " 0A"]);
+        var keypad2 = ParseKeypad([" ^A", "<v>"]);
+        var keypads = Enumerable.Repeat(keypad2, depth).Prepend(keypad1).ToArray();
+
+        var cache = new ConcurrentDictionary<(char currentKey, char nextKey, int depth), long>();
+        var res = 0L;
+
+        foreach (var line in input)
         {
-
-            List<string> solutions = GetSolutionsAtLevel(2, currentKey, nextKey, numericKeypad, directionalKeypad, memoizedBFSProvider);
-            int minSolutionLength = solutions.Min(s => s.Length);
-            var solution = solutions.Where(x => x.Length == minSolutionLength).FirstOrDefault();
-            if (solution != null)
-            {
-                Console.WriteLine($"Inputing Key: {nextKey}, Sequence: {solution}, Length: {solution.Length}");
-                finalSequence += solution;
-            }
-            currentKey = nextKey;
+            var num = int.Parse(line[..^1]);
+            res += num * EncodeKeys(line, keypads, cache);
         }
-
-        int numericPartOfCode = int.Parse(code.Replace("A", ""));
-
-        int complexity = numericPartOfCode * finalSequence.Length;
-
-        Console.WriteLine($"Code: {code}, Numeric Part: {numericPartOfCode}, Final Sequence: {finalSequence}, Length: {finalSequence.Length}, Complexity: {complexity}");
-    
-        return complexity;
+        return res;
     }
 
-    private static List<string> GetSolutionsAtLevel(int solutionLevel, char startKey, char targetKey, KeypadType numericKeypad, KeypadType directionalKeypad, MemoizedBFSProvider memoizedBFSProvider)
+    // Determines the length of the shortest sequence that is needed to enter the given 
+    // keys. An empty keypad array means that the sequence is simply entered by a human 
+    // and no further encoding is needed. Otherwise the sequence is entered by a robot
+    // which needs to be programmed. In practice this means that the keys are encoded 
+    // using the robots keypad (the first keypad), generating an other sequence of keys.
+    // This other sequence is then recursively encoded using the rest of the keypads.
+    private static long EncodeKeys(string keys, Dictionary<Vec2, char>[] keypads, ConcurrentDictionary<(char currentKey, char nextKey, int depth), long> cache)
     {
-        if(solutionLevel == 0)
+        if (keypads.Length == 0)
         {
-            return memoizedBFSProvider.MemoizedBFS(numericKeypad, startKey, targetKey);
+            return keys.Length;
         }
         else
         {
-            var lowerLevelSolutions = GetSolutionsAtLevel(solutionLevel - 1, startKey, targetKey, numericKeypad, directionalKeypad, memoizedBFSProvider);
-            List<string> temp = new List<string>();
-            foreach (var lowerLevelSolution in lowerLevelSolutions)
+            // invariant: the robot starts and finishes by pointing at the 'A' key
+            var currentKey = 'A';
+            var length = 0L;
+
+            foreach (var nextKey in keys)
             {
-                List<string> temp2 = new List<string>();
-                char currentKey = 'A';
-                foreach (var nextKey in lowerLevelSolution)
-                {
-                    List<string> temp3 = memoizedBFSProvider.MemoizedBFS(directionalKeypad, currentKey, nextKey);
-                    currentKey = nextKey;
-
-                    if (temp2.Count == 0)
-                    {
-                        temp2 = temp3;
-                    }
-                    else
-                    {
-                        temp2 = temp2.SelectMany(x=>temp3.Select(y=>x+y)).ToList();
-                    }
-                }
-                temp.AddRange(temp2);                
+                length += EncodeKey(currentKey, nextKey, keypads, cache);
+                // while the sequence is entered the current key changes accordingly
+                currentKey = nextKey;
             }
-            return temp;
-        }        
-    }
 
-    private static KeypadType GenerateNumericKeypad()
-    {
-        string[] numeric = { "789", "456", "123", " 0A" };
-        return new KeypadType(numeric);
-    }
-
-    private static KeypadType GenerateDirectionalKeypad()
-    {
-        string[] directional = { " ^A", "<v>" };
-        return new KeypadType(directional);
-    }    
-}
-
-public class MemoizedBFSProvider
-{
-    private Dictionary<(KeypadType keypadType, char sourceKey, char targetKey), List<string>> cache = new Dictionary<(KeypadType keypadType, char sourceKey, char targetKey), List<string>>();
-    
-    public List<string> MemoizedBFS(KeypadType keypadType, char sourceKey, char targetKey)
-    {
-        var key = (keypadType, sourceKey, targetKey);
-        if (cache.ContainsKey(key))
-        {
-            return cache[key];
-        }
-        else
-        {
-            List<KeypadState> currentStates = new List<KeypadState> { new KeypadState(sourceKey) };
-            while (!currentStates.Any(x => x.CurrentKey == targetKey))
+            // at the end the current key should be reset to 'A'
+            if (currentKey != 'A')
             {
-                List<KeypadState> nextStates = new List<KeypadState>();
-                foreach (var state in currentStates)
-                {
-                    nextStates.AddRange(state.GetNextStates(keypadType));
-                }
-                currentStates = nextStates;
-            }
-            int minSequenceLength = currentStates.Where(x => x.CurrentKey == targetKey).Min(x => x.SequenceLength);
+                Console.WriteLine("The robot should point at the 'A' key");
+            }                
 
-            List<string> solutions = currentStates.Where(x => x.CurrentKey == targetKey && x.SequenceLength == minSequenceLength).Select(x => x.Sequence + 'A').ToList();
-
-            cache.Add(key, solutions);
-
-            return solutions;
-        }           
-    }
-}
-
-public class KeypadState
-{
-    public char CurrentKey { get; private set; }
-    public int SequenceLength { get; private set; }
-    public string Sequence { get; private set; }
-    public KeypadState(char currentKey)
-    {
-        CurrentKey = currentKey;
-        SequenceLength = 0;
-        Sequence = string.Empty;
-    }
-    public KeypadState(char currentKey, int sequenceLength, string sequence)
-    {
-        CurrentKey = currentKey;
-        SequenceLength = sequenceLength;
-        Sequence = sequence;
-    }
-
-    public List<KeypadState> GetNextStates(KeypadType keypadType)
-    {
-        int nextSequenceLength = SequenceLength + 1;
-        return keypadType.KeyDestinations[CurrentKey]
-            .Select(destination => new KeypadState(destination.key,
-                nextSequenceLength,
-                Sequence + destination.direction))
-            .ToList();
-    }
-}
-
-public class KeypadType
-{
-    public Dictionary<char, List<(char direction, char key)>> KeyDestinations { get; private set; } = new Dictionary<char, List<(char direction, char key)>>();
-
-    private void AddDirection(char sourceKey, char direction, char destinationKey)
-    {
-        if (destinationKey != ' ')
-        {
-            KeyDestinations[sourceKey].Add((direction, destinationKey));
+            return length;
         }
     }
 
-    public KeypadType(string[] keypadArray)
+    private static long EncodeKey(char currentKey, char nextKey, Dictionary<Vec2, char>[] keypads, ConcurrentDictionary<(char currentKey, char nextKey, int depth), long> cache)
     {
-        for (int row = 0; row < keypadArray.Length; row++)
-        {
-            for (int column = 0; column < keypadArray[row].Length; column++)
+        return cache.GetOrAdd(
+            (currentKey, nextKey, keypads.Length), _ =>
             {
-                KeyDestinations.Add(keypadArray[row][column], new List<(char direction, char key)>());
-                if (row > 0)
+                var keypad = keypads[0];
+
+                var currentPos = keypad.Single(kvp => kvp.Value == currentKey).Key;
+                var nextPos = keypad.Single(kvp => kvp.Value == nextKey).Key;
+
+                var dy = nextPos.y - currentPos.y;
+                var vert = new string(dy < 0 ? 'v' : '^', Math.Abs(dy));
+
+                var dx = nextPos.x - currentPos.x;
+                var horiz = new string(dx < 0 ? '<' : '>', Math.Abs(dx));
+
+                var cost = long.MaxValue;
+                // we can usually go vertical first then horizontal or vica versa,
+                // but we should check for the extra condition and don't position
+                // the robot over the ' ' key:
+                if (keypad[new Vec2(currentPos.x, nextPos.y)] != ' ')
                 {
-                    AddDirection(keypadArray[row][column], '^', keypadArray[row - 1][column]);
+                    cost = Math.Min(cost, EncodeKeys($"{vert}{horiz}A", keypads[1..], cache));
                 }
 
-                if (row < keypadArray.Length - 1)
+                if (keypad[new Vec2(nextPos.x, currentPos.y)] != ' ')
                 {
-                    AddDirection(keypadArray[row][column], 'v', keypadArray[row + 1][column]);
+                    cost = Math.Min(cost, EncodeKeys($"{horiz}{vert}A", keypads[1..], cache));
                 }
-
-                if (column > 0)
-                {
-                    AddDirection(keypadArray[row][column], '<', keypadArray[row][column - 1]);
-                }
-
-                if (column < keypadArray[row].Length - 1)
-                {
-                    AddDirection(keypadArray[row][column], '>', keypadArray[row][column + 1]);
-                }
+                return cost;
             }
+        );
+    }
 
-        }
+    private static Dictionary<Vec2, char> ParseKeypad(List<string> lines)
+    {
+        return (
+            from y in Enumerable.Range(0, lines.Count)
+            from x in Enumerable.Range(0, lines[0].Length)
+            select new KeyValuePair<Vec2, char>(new Vec2(x, -y), lines[y][x])
+        ).ToDictionary();
     }
 }
+
+record struct Vec2(int x, int y);
