@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <None Update="input.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="sample.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

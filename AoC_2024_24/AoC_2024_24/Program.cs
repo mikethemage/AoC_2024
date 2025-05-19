@@ -1,357 +1,622 @@
-﻿namespace AoC_2024_24;
+﻿using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 
-public class Program
+internal static class Program
 {
-    static void Main(string[] args)
+    public static void Main(string[] args)
     {
-        const string filename = "input.txt";
-        //const string filename = "sample.txt";
-
-        var lines = File.ReadAllLines(filename);
-
-        Dictionary<string, Wire> wires = new Dictionary<string, Wire>();
-        List<Gate> gates = new List<Gate>();
-        HashSet<string> requiredWireNames = new HashSet<string>();
-
-        bool processGates = false;
-        foreach (var line in lines)
+        try
         {
-            if (processGates)
+            var part1Files = new[]
             {
-                Gate newGate = CreateGateFromLine(line);
-                requiredWireNames.Add(newGate.Input1);
-                requiredWireNames.Add(newGate.Input2);
-                requiredWireNames.Add(newGate.Output);
-                gates.Add(newGate);
+                ("input.txt", "output_01_01.txt")
+               
+            };
+
+            foreach (var (inputFile, outputFile) in part1Files)
+            {
+                SolvePart1(inputFile, outputFile);
             }
-            else if (string.IsNullOrEmpty(line))
+
+            var part2Files = new[]
             {
-                processGates = true;
-            }
-            else
+                ("input.txt", "output_02_03.txt", "ADD")
+                
+            };
+
+            foreach (var (inputFile, outputFile, operation) in part2Files)
             {
-                Wire newWire = CreateWireFromLine(line);
-                wires.Add(newWire.Name, newWire);
+                SolvePart2(inputFile, outputFile, operation);
             }
         }
-
-        foreach (string requiredWireName in requiredWireNames)
+        catch (Exception ex)
         {
-            if (!wires.ContainsKey(requiredWireName))
+            Console.Error.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+    private record Gate(string InputA, string InputB, string Operation);
+
+    private record Problem(
+        IDictionary<string, int> Values,
+        IDictionary<string, Gate> Gates,
+        int Digits
+    );
+
+    private static void SolvePart1(string inputFile, string outputFile)
+    {
+        if (string.IsNullOrWhiteSpace(inputFile) || string.IsNullOrWhiteSpace(outputFile))
+        {
+            throw new ArgumentException("File paths cannot be null or whitespace.");
+        }
+
+        var problem = ParseInput(inputFile);
+        var value = ReadDec(problem, "z");
+        File.WriteAllText(outputFile, value.ToString());
+    }
+
+    private static void SolvePart2(string inputFile, string outputFile, string operation)
+    {
+        if (string.IsNullOrWhiteSpace(inputFile) || string.IsNullOrWhiteSpace(outputFile))
+        {
+            throw new ArgumentException("File paths cannot be null or whitespace.");
+        }
+
+        var problem = ParseInput(inputFile);
+
+        var ox = ReadDec(problem, "x");
+        var oy = ReadDec(problem, "y");
+
+        Console.WriteLine("#" + operation + ":");
+
+        var tests = new List<(long X, long Y, long Expected)>
+        {
+            (0, 0, operation == "ADD" ? 0 + 0 : 0 & 0)
+        };
+
+        for (int i = 0; i < problem.Digits - 1; i++)
+        {
+            long x = 1L << i;
+            long y = 1L << i;
+
+            tests.Add((x, y, operation == "ADD" ? x + y : x & y));
+            tests.Add((0, y, operation == "ADD" ? 0 + y : 0 & y));
+            tests.Add((x, 0, operation == "ADD" ? x + 0 : x & 0));
+        }
+
+        // Test from input
+        tests.Add((ox, oy, operation == "ADD" ? ox + oy : ox & oy));
+
+        // More random tests
+        var random = new Random();
+        int max = 1 << (problem.Digits - 1);
+        for (int i = 0; i < 500; i++)
+        {
+            var x = random.NextInt64(max);
+            var y = random.NextInt64(max);
+            tests.Add((x, y, operation == "ADD" ? x + y : x & y));
+        }
+
+        var badFixes = new HashSet<string>();
+        var fixes = new List<List<string[]>> { new List<string[]>() };
+
+        bool failedAnyTest = true;
+        (long X, long Y, long Expected) lastTest = default;
+
+        while (failedAnyTest)
+        {
+            failedAnyTest = false;
+            int testCount = 0;
+            var newFixes = new List<List<string[]>>();
+
+            foreach (var test in tests)
             {
-                wires.Add(requiredWireName, new Wire(requiredWireName));
-            }
-        }
+                testCount++;
+                lastTest = test;
 
-        ProcessAll(wires, gates);
-        List<string> outputNames = wires.Keys.Where(x => x.StartsWith("z")).Order().ToList();
-        long accumulator = GetAccumulator(wires, outputNames);
+                var results = fixes
+                    .AsParallel()
+                    .WithDegreeOfParallelism(Environment.ProcessorCount)
+                    .Select(fix => CheckFix(problem, badFixes, test, fix))
+                    .ToList();
 
-        Console.WriteLine($"Final value from data: {accumulator}");
+                var anyFailed = false;
+                var foundFixes = new List<List<string[]>>();
 
-        //Part 2:
-        List<string> inputXNames = wires.Keys.Where(x => x.StartsWith("x")).Order().ToList();
-        List<string> inputYNames = wires.Keys.Where(x => x.StartsWith("y")).Order().ToList();
-
-        Console.WriteLine($"Number of X inputs: {inputXNames.Count}, Number of Y inputs: {inputYNames.Count}, Number of Outputs: {outputNames.Count}");
-        if (inputXNames.Count != inputYNames.Count)
-        {
-            Console.WriteLine("Input count mismatch!");
-        }
-        if (outputNames.Count != inputXNames.Count + 1)
-        {
-            Console.WriteLine("Invalid number of outputs!");
-        }
-
-        Dictionary<string, Wire> correctWires = new Dictionary<string, Wire>();
-        foreach (string wireName in inputXNames)
-        {
-            correctWires.Add(wireName, wires[wireName]);
-        }
-
-        foreach (string wireName in inputYNames)
-        {
-            correctWires.Add(wireName, wires[wireName]);
-        }
-
-        foreach (string wireName in outputNames)
-        {
-            correctWires.Add(wireName, new Wire(wireName));
-        }
-
-
-
-        List<Gate> correctGates = new List<Gate>();
-
-        string carryName = "HalfAdder0Carry";
-        for (int i = 0; i < inputXNames.Count; i++)
-        {
-            if (i == 0)
-            {
-                HalfAdder halfAdder = new HalfAdder("HalfAdder0", "x00", "y00", "z00", carryName);
-                correctGates.AddRange(halfAdder.InternalGates);
-                correctWires.Add(carryName, new Wire(carryName));
-            }
-            else
-            {
-                string nextCarryName;
-                if (i == inputXNames.Count - 1)
+                foreach (var (failed, foundGoodFixes, foundBadFixes) in results)
                 {
-                    nextCarryName = $"z{i + 1:D2}";
+                    anyFailed |= failed;
+                    foundFixes.AddRange(foundGoodFixes);
+                    badFixes.UnionWith(foundBadFixes);
+                }
+
+                newFixes.AddRange(foundFixes);
+
+                if (anyFailed)
+                {
+                    failedAnyTest = true;
+                    break;
+                }
+            }
+
+            fixes = newFixes.Distinct().ToList();
+
+            Console.WriteLine($"Tests passed: {(failedAnyTest ? (testCount - 1) : testCount)}");
+            Console.WriteLine($"Failed test: X={lastTest.X}, Y={lastTest.Y}, Expected={lastTest.Expected}");
+            Console.WriteLine($"Found new fixes for last test: {fixes.Count}");
+        }
+
+        var answers = fixes
+            .Select(fix =>
+                string.Join(",", fix.SelectMany(swap => swap).Order()))
+            .ToList();
+
+        File.WriteAllLines(outputFile, answers);
+    }
+
+    private static (bool failed, List<List<string[]>> goodFixes, HashSet<string> badFixes)
+        CheckFix(Problem problem, HashSet<string> badfixes, (long X, long Y, long Expected) test, List<string[]> fix)
+    {
+        var newFixes = new List<List<string[]>>();
+        var newBadFixes = new HashSet<string>();
+
+        var fixKey = GetFixKey(fix);
+
+        if (!badfixes.Contains(fixKey) && IsFixesProblem(problem, test, fix))
+        {
+            newFixes.Add(fix);
+            return (false, newFixes, newBadFixes);
+        }
+
+        newBadFixes.Add(fixKey);
+
+        if (fix.Count == 4)
+        {
+            return (true, newFixes, newBadFixes);
+        }
+
+        var wrongOutputs = ComputeWiresWithWrongOutputs(problem, test, fix);
+        var swaps = GenerateSwapVariants(wrongOutputs.ToArray(), 2);
+
+        foreach (var swapPair in swaps)
+        {
+            var singleSwapFix = new List<string[]> { swapPair };
+            var singleSwapKey = GetFixKey(singleSwapFix);
+
+            if (!badfixes.Contains(singleSwapKey))
+            {
+                // works without this, but I believe that without this it is possible to miss some fixes
+                // if (IsFixesProblem(problem, test, singleSwapFix))
+                // {
+                //     newFixes.Add(singleSwapFix);
+                // }
+                // else
+                // {
+                //     newBadFixes.Add(singleSwapKey);
+                // }
+            }
+
+            if (fix.Any(f => f.Contains(swapPair[0]) || f.Contains(swapPair[1])))
+            {
+                continue;
+            }
+
+            var appendedFix = new List<string[]>(fix) { swapPair };
+            var appendedKey = GetFixKey(appendedFix);
+
+            if (!badfixes.Contains(appendedKey))
+            {
+                if (IsFixesProblem(problem, test, appendedFix))
+                {
+                    newFixes.Add(appendedFix);
                 }
                 else
                 {
-                    nextCarryName = $"FullAdderCarry{i:D2}";
-                    correctWires.Add(nextCarryName, new Wire(nextCarryName));
+                    newBadFixes.Add(appendedKey);
                 }
-                FullAdder fullAdder = new FullAdder($"FullAdder{i:D2}", $"x{i:D2}", $"y{i:D2}", carryName, $"z{i:D2}", nextCarryName);
-                carryName = nextCarryName;
-                correctGates.AddRange(fullAdder.InternalGates);
-                foreach (Wire internalWire in fullAdder.InternalWires)
+            }
+        }
+
+        return (true, newFixes, newBadFixes);
+    }
+
+    private static readonly ConcurrentDictionary<((long X, long Y, long Expected) test, string fixKey), IEnumerable<string>> ComputeWiresWithWrongOutputsCache
+        = new();
+
+    private static IEnumerable<string> ComputeWiresWithWrongOutputs(
+        Problem problem,
+        (long X, long Y, long Expected) test,
+        List<string[]> fix)
+    {
+        var key = (test, GetFixKey(fix));
+        if (ComputeWiresWithWrongOutputsCache.TryGetValue(key, out var cachedResult))
+        {
+            return cachedResult;
+        }
+
+        var copy = Copy(problem);
+        WriteDec(copy, test.X, "x");
+        WriteDec(copy, test.Y, "y");
+        _ = ReadDec(copy, "z");
+
+        DoSwap(copy, fix);
+
+        var wrongOutputs = BackPropagateError(copy, DecToBin(test.Expected, copy.Digits));
+        ComputeWiresWithWrongOutputsCache[key] = wrongOutputs;
+        return wrongOutputs;
+    }
+
+    private static string GetFixKey(IEnumerable<string[]> fix)
+    {
+        var normalized = fix
+            .Select(p => p.Order().ToArray())
+            .OrderBy(p => p[0])
+            .ToList();
+
+        return string.Join(",", normalized.Select(arr => string.Join(',', arr)));
+    }
+
+    private static readonly ConcurrentDictionary<((long X, long Y, long Expected) test, string fixKey), bool> IsFixesProblemCache
+        = new();
+
+    private static bool IsFixesProblem(
+        Problem problem,
+        (long X, long Y, long Expected) test,
+        IEnumerable<string[]> fix)
+    {
+        var cacheKey = (test, GetFixKey(fix));
+        if (IsFixesProblemCache.TryGetValue(cacheKey, out var cachedResult))
+        {
+            return cachedResult;
+        }
+
+        var copy = Copy(problem);
+        DoSwap(copy, fix);
+
+        WriteDec(copy, test.X, "x");
+        WriteDec(copy, test.Y, "y");
+
+        try
+        {
+            var actualZ = ReadDec(copy, "z");
+            var isGood = actualZ == test.Expected;
+            IsFixesProblemCache[cacheKey] = isGood;
+            return isGood;
+        }
+        catch (InvalidOperationException)
+        {
+            IsFixesProblemCache[cacheKey] = false;
+            return false;
+        }
+    }
+
+    private static void DoSwap(Problem copy, IEnumerable<string[]> swaps)
+    {
+        foreach (var swap in swaps)
+        {
+            var gateA = copy.Gates[swap[0]];
+            var gateB = copy.Gates[swap[1]];
+
+            copy.Gates[swap[0]] = gateB;
+            copy.Gates[swap[1]] = gateA;
+        }
+    }
+
+    private static Problem Copy(Problem problem) =>
+        new(
+            new Dictionary<string, int>(problem.Values),
+            new Dictionary<string, Gate>(problem.Gates),
+            problem.Digits
+        );
+
+    private static IEnumerable<string> BackPropagateError(Problem problem, string expectedFull)
+    {
+        var possibleWrongOutputs = new HashSet<string>();
+        var queue = new Queue<Dictionary<string, int>>();
+        var visited = new HashSet<string>();
+
+        var expectedOutputsInitial = new Dictionary<string, int>();
+        for (int i = problem.Digits - 1; i >= 0; i--)
+        {
+            var wireName = "z" + i.ToString("D2");
+            expectedOutputsInitial[wireName] = expectedFull[expectedFull.Length - 1 - i] == '1' ? 1 : 0;
+        }
+
+        queue.Enqueue(expectedOutputsInitial);
+
+        while (queue.Count > 0)
+        {
+            var count = queue.Count;
+            for (int i = 0; i < count; i++)
+            {
+                var currentExpected = queue.Dequeue();
+                var key = string.Join(";", currentExpected.OrderBy(p => p.Key)
+                                                          .Select(p => $"{p.Key}={p.Value}"));
+                if (!visited.Add(key))
                 {
-                    correctWires.Add(internalWire.Name, internalWire);
+                    continue;
+                }
+
+                var possibleInputs = new Dictionary<string, HashSet<(int, int)>>();
+
+                foreach (var (wireKey, expectedValue) in currentExpected)
+                {
+                    var actualValue = ComputeValue(problem, wireKey);
+                    if (actualValue == expectedValue)
+                    {
+                        continue;
+                    }
+
+                    possibleWrongOutputs.Add(wireKey);
+
+                    if (problem.Gates.TryGetValue(wireKey, out var gate))
+                    {
+                        AddPossibleInputs(possibleInputs, wireKey, expectedValue, gate);
+                    }
+                }
+
+                var variants = GenerateExpectedOutputsVariants(problem, possibleInputs);
+                foreach (var variant in variants)
+                {
+                    var variantKey = string.Join(";", variant.OrderBy(p => p.Key)
+                                                             .Select(p => $"{p.Key}={p.Value}"));
+                    if (!visited.Contains(variantKey))
+                    {
+                        queue.Enqueue(variant);
+                    }
                 }
             }
         }
 
-        ProcessAll(correctWires, correctGates);
-
-        long correctAccumulator = GetAccumulator(correctWires, outputNames);
-
-        Console.WriteLine($"Final corrected value: {correctAccumulator}");        
-
-
+        return possibleWrongOutputs;
     }
 
-    private static long GetAccumulator(Dictionary<string, Wire> wires, List<string> outputNames)
+    private static IEnumerable<string[]> GenerateSwapVariants(string[] keys, int maxLength)
     {
-        long multiplier = 1;
-        long accumulator = 0;
+        var result = new List<string[]>();
+        var queue = new Queue<List<string>>();
+        queue.Enqueue(new List<string>());
 
-        foreach (string wireName in outputNames)
+        while (queue.Count > 0)
         {
-            Console.WriteLine($"{wireName}: {wires[wireName].Value}");
-            accumulator += (long)wires[wireName].Value! * multiplier;
-            multiplier *= 2;
-        }
+            var current = queue.Dequeue();
 
-        return accumulator;
-    }
-
-    private static void ProcessAll(Dictionary<string, Wire> wires, List<Gate> gates)
-    {
-        List<Gate> unprocessedGates = new List<Gate>(gates);
-        List<Gate> canBeProcessed = new List<Gate>();
-
-        while (unprocessedGates.Count > 0)
-        {
-            if (canBeProcessed.Count == 0)
+            if (current.Count > 0 && current.Count <= maxLength && current.Count % 2 == 0)
             {
-                canBeProcessed = unprocessedGates.Where(g => wires[g.Input1].Value != null && wires[g.Input2].Value != null).ToList();
+                result.Add(current.ToArray());
             }
-            Gate? nextGate = canBeProcessed.FirstOrDefault();
-            if (nextGate == null)
-            {
-                throw new Exception("This should never happen!");
-            }
-            canBeProcessed.Remove(nextGate);
-            unprocessedGates.Remove(nextGate);
-            ProcessGate(nextGate, wires);
 
+            if (current.Count >= maxLength || current.Count >= keys.Length)
+            {
+                continue;
+            }
+
+            var startIndex = current.Count == 0
+                ? 0
+                : Array.IndexOf(keys, current[^1]);
+
+            for (int i = startIndex; i < keys.Length; i++)
+            {
+                if (current.Contains(keys[i])) continue;
+                var newSubset = new List<string>(current) { keys[i] };
+                queue.Enqueue(newSubset);
+            }
         }
+
+        return result;
     }
 
-    static void ProcessGate(Gate gate, Dictionary<string, Wire> wires)
+    private static List<Dictionary<string, int>> GenerateExpectedOutputsVariants(
+        Problem problem,
+        Dictionary<string, HashSet<(int, int)>> possibleInputs)
     {
-        Wire input1 = wires[gate.Input1];
-        Wire input2 = wires[gate.Input2];
-        if (input1.Value is null)
+        var keys = possibleInputs.Keys.ToArray();
+        var result = new List<Dictionary<string, int>>();
+        var queue = new Queue<(Dictionary<string, int>, int)>();
+        queue.Enqueue((new Dictionary<string, int>(), 0));
+
+        while (queue.Count > 0)
         {
-            throw new Exception($"Invald input wire state on wire: {input1.Name}");
-        }
-        if (input2.Value is null)
-        {
-            throw new Exception($"Invald input wire state on wire: {input2.Name}");
+            var (currentExpected, idx) = queue.Dequeue();
+            if (idx == keys.Length)
+            {
+                if (currentExpected.Count > 0)
+                {
+                    result.Add(currentExpected);
+                }
+                continue;
+            }
+
+            var key = keys[idx];
+            if (!problem.Gates.TryGetValue(key, out var gate))
+            {
+                continue;
+            }
+
+            foreach (var (inA, inB) in possibleInputs[key])
+            {
+                var newExpected = new Dictionary<string, int>(currentExpected);
+                if (problem.Gates.ContainsKey(gate.InputA))
+                {
+                    newExpected[gate.InputA] = inA;
+                }
+                if (problem.Gates.ContainsKey(gate.InputB))
+                {
+                    newExpected[gate.InputB] = inB;
+                }
+
+                queue.Enqueue((newExpected, idx + 1));
+            }
         }
 
-        int? outputValue = null;
-        switch (gate.GateType)
+        return result;
+    }
+
+    private static void AddPossibleInputs(
+        Dictionary<string, HashSet<(int, int)>> expectedInputs,
+        string key,
+        int expected,
+        Gate gate)
+    {
+        if (!expectedInputs.ContainsKey(key))
+        {
+            expectedInputs[key] = new HashSet<(int, int)>();
+        }
+
+        switch (gate.Operation)
         {
             case "AND":
-                if (input1.Value == 1 && input2.Value == 1)
+                if (expected == 0)
                 {
-                    outputValue = 1;
+                    expectedInputs[key].Add((0, 0));
+                    expectedInputs[key].Add((0, 1));
+                    expectedInputs[key].Add((1, 0));
                 }
                 else
                 {
-                    outputValue = 0;
+                    expectedInputs[key].Add((1, 1));
                 }
                 break;
 
             case "OR":
-                if (input1.Value == 1 || input2.Value == 1)
+                if (expected == 0)
                 {
-                    outputValue = 1;
+                    expectedInputs[key].Add((0, 0));
                 }
                 else
                 {
-                    outputValue = 0;
+                    expectedInputs[key].Add((0, 1));
+                    expectedInputs[key].Add((1, 0));
+                    expectedInputs[key].Add((1, 1));
                 }
                 break;
 
             case "XOR":
-                if (input1.Value != input2.Value)
+                if (expected == 0)
                 {
-                    outputValue = 1;
+                    expectedInputs[key].Add((0, 0));
+                    expectedInputs[key].Add((1, 1));
                 }
                 else
                 {
-                    outputValue = 0;
+                    expectedInputs[key].Add((0, 1));
+                    expectedInputs[key].Add((1, 0));
                 }
                 break;
-
-            default:
-                throw new Exception($"Invalid gate type:{gate.GateType}");
         }
-
-        Wire output = wires[gate.Output];
-        output.Value = outputValue;
     }
 
-    static Wire CreateWireFromLine(string line)
+    private static string DecToBin(long value, int n) =>
+        Convert.ToString(value, 2).PadLeft(n, '0');
+
+    private static long ReadDec(Problem problem, string prefix)
     {
-        string[] tokens = line.Split(": ");
-        string name = tokens[0].Trim();
-        int initialValue = int.Parse(tokens[1].Trim());
-        return new Wire(name, initialValue);
-    }
-
-    static Gate CreateGateFromLine(string line)
-    {
-        string[] tokens = line.Split(" -> ");
-        string output = tokens[1].Trim();
-        string[] subTokens = tokens[0].Split(" ");
-        string input1 = subTokens[0].Trim();
-        string gateType = subTokens[1].Trim();
-        string input2 = subTokens[2].Trim();
-        return new Gate { GateType = gateType, Input1 = input1, Input2 = input2, Output = output };
-    }
-}
-
-public class Wire
-{
-    public string Name { get; set; }
-    public int? Value { get; set; }
-    private int? _initialValue;
-
-    public Wire(string name, int initialValue)
-    {
-        Name = name;
-        _initialValue = initialValue;
-        Value = initialValue;
-    }
-
-    public Wire(string name)
-    {
-        Name = name;
-        _initialValue = null;
-        Value = null;
-    }
-
-    public void Reset()
-    {
-        Value = _initialValue;
-    }
-}
-
-public class Gate
-{
-    public required string Input1 { get; set; }
-    public required string Input2 { get; set; }
-    public required string GateType { get; init; }
-    public required string Output { get; set; }
-}
-
-public class HalfAdder
-{
-    public string Name { get; init; }
-    public string Input1 { get; init; }
-    public string Input2 { get; init; }
-    public string Output { get; init; }
-    public string Carry { get; init; }
-
-    private Gate _xorGate;
-    private Gate _andGate;
-
-    public List<Gate> InternalGates
-    {
-        get
+        long value = 0;
+        for (int i = problem.Digits - 1; i >= 0; i--)
         {
-            List<Gate> internalGates = new List<Gate>();
-            internalGates.Add(_andGate);
-            internalGates.Add(_xorGate);
-            return internalGates;
+            value <<= 1;
+            value += ComputeValue(problem, $"{prefix}{i:D2}");
         }
+        return value;
     }
 
-    public HalfAdder(string name, string input1, string input2, string output, string carry)
+    private static void WriteDec(Problem problem, long value, string prefix) =>
+        WriteBin(problem, DecToBin(value, problem.Digits), prefix);
+
+    private static void WriteBin(Problem problem, string value, string prefix)
     {
-        Name = name;
-        Input1 = input1;
-        Input2 = input2;
-        Output = output;
-        Carry = carry;
-        _xorGate = new Gate { GateType = "XOR", Input1 = input1, Input2 = input2, Output = output };
-        _andGate = new Gate { GateType = "AND", Input1 = input1, Input2 = input2, Output = carry };
-    }
-}
-
-public class FullAdder
-{
-    public string Name { get; init; }
-    public string Input1 { get; init; }
-    public string Input2 { get; init; }
-    public string CarryInput { get; init; }
-    public string Output { get; init; }
-    public string CarryOutput { get; init; }
-
-    public List<Wire> InternalWires { get; private set; } = new List<Wire>();
-
-    private HalfAdder _halfAdder1;
-    private HalfAdder _halfAdder2;
-    private Gate _orGate;
-
-    public List<Gate> InternalGates
-    {
-        get
+        for (int i = problem.Digits - 1; i >= 0; i--)
         {
-            List<Gate> internalGates = new List<Gate>();
-
-            internalGates.Add(_orGate);
-            internalGates.AddRange(_halfAdder1.InternalGates);
-            internalGates.AddRange(_halfAdder2.InternalGates);
-
-            return internalGates;
+            var key = prefix + i.ToString("D2");
+            if (problem.Values.ContainsKey(key))
+            {
+                problem.Values[key] = value[value.Length - 1 - i] == '0' ? 0 : 1;
+            }
         }
     }
 
-    public FullAdder(string name, string input1, string input2, string carryInput, string output, string carryOutput)
+    private static int ComputeValue(Problem problem, string key, HashSet<string> visited = null)
     {
-        Name = name;
-        Input1 = input1;
-        Input2 = input2;
-        CarryInput = carryInput;
-        Output = output;
-        CarryOutput = carryOutput;
+        if (problem.Values.TryGetValue(key, out var value))
+        {
+            return value;
+        }
 
-        InternalWires.Add(new Wire(name + "InternalSum1"));
-        InternalWires.Add(new Wire(name + "InternalCarry1"));
-        InternalWires.Add(new Wire(name + "InternalCarry2"));
+        if (!problem.Gates.TryGetValue(key, out var gate))
+        {
+            return 0;
+        }
 
-        _halfAdder1 = new HalfAdder(name + "HalfAdder1", input1, input2, name + "InternalSum1", name + "InternalCarry1");
-        _halfAdder2 = new HalfAdder(name + "HalfAdder2", name + "InternalSum1", carryInput, output, name + "InternalCarry2");
-        _orGate = new Gate { GateType = "OR", Input1 = name + "InternalCarry1", Input2 = name + "InternalCarry2", Output = carryOutput };
+        visited ??= new HashSet<string>();
+        if (!visited.Add(key))
+        {
+            throw new InvalidOperationException($"Cycle detected on wire '{key}'.");
+        }
+
+        var inputA = ComputeValue(problem, gate.InputA, visited);
+        var inputB = ComputeValue(problem, gate.InputB, visited);
+
+        var output = gate.Operation switch
+        {
+            "AND" => inputA & inputB,
+            "OR" => inputA | inputB,
+            "XOR" => inputA ^ inputB,
+            _ => throw new InvalidOperationException($"Unknown operation {gate.Operation}")
+        };
+
+        problem.Values[key] = output;
+        return output;
+    }
+
+    private static Problem ParseInput(string file)
+    {
+        using var sr = new StreamReader(file);
+
+        var valueRegex = new Regex(@"^(?<key>\w+):\s*(?<val>\d+)$");
+        var operationRegex = new Regex(@"^(?<inA>\w+)\s+(?<op>AND|XOR|OR)\s+(?<inB>\w+)\s+->\s+(?<out>\w+)$");
+
+        var values = new Dictionary<string, int>();
+        int maxIndex = 0;
+
+        string? line;
+        while (!string.IsNullOrEmpty(line = sr.ReadLine()))
+        {
+            var match = valueRegex.Match(line);
+            if (!match.Success)
+            {
+                break;
+            }
+
+            var key = match.Groups["key"].Value;
+            var val = int.Parse(match.Groups["val"].Value);
+
+            values[key] = val;
+
+            if (key.StartsWith("z", StringComparison.OrdinalIgnoreCase) && int.TryParse(key.Substring(1), out var num))
+            {
+                if (num > maxIndex) maxIndex = num;
+            }
+        }
+
+        var gates = new Dictionary<string, Gate>();
+        while (!sr.EndOfStream && (line = sr.ReadLine()) != null)
+        {
+            var match = operationRegex.Match(line);
+            if (!match.Success) continue;
+
+            var inA = match.Groups["inA"].Value;
+            var op = match.Groups["op"].Value;
+            var inB = match.Groups["inB"].Value;
+            var outW = match.Groups["out"].Value;
+
+            gates[outW] = new Gate(inA, inB, op);
+
+            if (outW.StartsWith("z", StringComparison.OrdinalIgnoreCase) && int.TryParse(outW[1..], out var num))
+            {
+                if (num > maxIndex) maxIndex = num;
+            }
+        }
+
+        return new Problem(values, gates, maxIndex + 1);
     }
 }
-
-
